@@ -1,0 +1,13 @@
+{
+  "required": true,
+  "minVersion": "0.8",
+  "package": "com.minecraft.randomspawn.mixin",
+  "compatibilityLevel": "JAVA_17",
+  "refmap": "randomspawn.refmap.json",
+  "mixins": [
+    "PlayerListMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}
