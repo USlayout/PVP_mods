@@ -5,7 +5,9 @@ import net.minecraft.core.Direction;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.level.block.BedBlock;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.levelgen.Heightmap;
 import net.minecraft.tags.FluidTags;
 import net.minecraft.tags.BiomeTags;
@@ -24,17 +26,36 @@ public class RandomSpawnHandler {
     @SubscribeEvent
     public static void onPlayerLogin(PlayerEvent.PlayerLoggedInEvent event) {
         ServerPlayer player = (ServerPlayer) event.getEntity();
-        RandomSpawnStorage storage = RandomSpawnStorage.get(player.serverLevel());
+        ServerLevel level = player.serverLevel();
+        if (level.dimension() != Level.OVERWORLD)
+            return;
+
+        RandomSpawnStorage storage = RandomSpawnStorage.get(level);
+        RandomSpawnStorage.BlockPosData stored = storage.getSpawn(player.getUUID());
+
+        if (!hasBedOrAnchorRespawn(player)) {
+            BlockPos manualOverride = RandomSpawnJsonBackup.load(level, player.getUUID(), player.getGameProfile().getName());
+            if (manualOverride != null) {
+                boolean differs = stored == null
+                        || stored.x != manualOverride.getX()
+                        || stored.y != manualOverride.getY()
+                        || stored.z != manualOverride.getZ();
+                if (differs) {
+                    applySpawn(player, level, manualOverride, 0.0f);
+                    storage.setSpawn(player.getUUID(), manualOverride.getX(), manualOverride.getY(), manualOverride.getZ());
+                    RandomSpawnJsonBackup.save(level, player, manualOverride);
+                    debug(String.format("login: applied manual spawn override for %s at x=%d y=%d z=%d",
+                            player.getGameProfile().getName(), manualOverride.getX(), manualOverride.getY(), manualOverride.getZ()));
+                    return;
+                }
+            }
+        }
 
         // 初回ログインでなければ終了
         if (storage.isSpawned(player.getUUID())) {
             debug("login: already spawned; skip random spawn");
             return;
         }
-
-        ServerLevel level = player.serverLevel();
-        if (level.dimension() != Level.OVERWORLD)
-            return;
 
         // ランダムスポーン地点を探索
         BlockPos spawnPos = findSafeSpawn(level, player);
@@ -58,22 +79,81 @@ public class RandomSpawnHandler {
 
         // TP: ログイン直後にサーバー→クライアントへ初期位置を同期して原点露出を防ぐ
         final BlockPos finalSpawnPos = spawnPos;
-        double fx = finalSpawnPos.getX() + 0.5;
-        double fy = finalSpawnPos.getY() + 1;
-        double fz = finalSpawnPos.getZ() + 0.5;
-        player.teleportTo(level, fx, fy, fz, 0.0f, player.getXRot());
-        // クライアントへ即座に位置同期（初期描画を目的地で開始させる）
-        if (player.connection != null) {
-            player.connection.teleport(fx, fy, fz, 0.0f, player.getXRot());
-        }
-
-        // 以後の死亡時も同地点にリスポーンするよう設定（即時設定）
-        player.setRespawnPosition(Level.OVERWORLD, finalSpawnPos, 0.0f, true, false);
+        applySpawn(player, level, finalSpawnPos, 0.0f);
 
         // 保存はテレポートと同ティックで実施
         RandomSpawnStorage s = RandomSpawnStorage.get(level);
         s.setSpawn(player.getUUID(), finalSpawnPos.getX(), finalSpawnPos.getY(), finalSpawnPos.getZ());
+        RandomSpawnJsonBackup.save(level, player, finalSpawnPos);
         debug(String.format("saved spawn for %s at x=%d y=%d z=%d", player.getGameProfile().getName(), finalSpawnPos.getX(), finalSpawnPos.getY(), finalSpawnPos.getZ()));
+    }
+
+    @SubscribeEvent
+    public static void onPlayerRespawn(PlayerEvent.PlayerRespawnEvent event) {
+        if (!(event.getEntity() instanceof ServerPlayer player)) {
+            return;
+        }
+
+        if (event.isEndConquered()) {
+            return;
+        }
+
+        ServerLevel level = player.serverLevel();
+        if (level == null || level.dimension() != Level.OVERWORLD) {
+            return;
+        }
+
+        if (hasBedOrAnchorRespawn(player)) {
+            return;
+        }
+
+        RandomSpawnStorage storage = RandomSpawnStorage.get(level);
+        RandomSpawnStorage.BlockPosData stored = storage.getSpawn(player.getUUID());
+        BlockPos manual = RandomSpawnJsonBackup.load(level, player.getUUID(), player.getGameProfile().getName());
+        BlockPos spawnPos = null;
+        if (manual != null) {
+            spawnPos = manual;
+            storage.setSpawn(player.getUUID(), manual.getX(), manual.getY(), manual.getZ());
+        } else if (stored != null) {
+            spawnPos = new BlockPos(stored.x, stored.y, stored.z);
+        }
+
+        if (spawnPos == null) {
+            return;
+        }
+
+        applySpawn(player, level, spawnPos, player.getYRot());
+        RandomSpawnJsonBackup.save(level, player, spawnPos);
+
+        debug(String.format("respawn: fallback to stored random spawn for %s at x=%d y=%d z=%d",
+                player.getGameProfile().getName(), spawnPos.getX(), spawnPos.getY(), spawnPos.getZ()));
+    }
+
+    private static void applySpawn(ServerPlayer player, ServerLevel level, BlockPos spawnPos, float yaw) {
+        double fx = spawnPos.getX() + 0.5;
+        double fy = spawnPos.getY() + 1;
+        double fz = spawnPos.getZ() + 0.5;
+        player.setRespawnPosition(Level.OVERWORLD, spawnPos, 0.0f, true, false);
+        player.teleportTo(level, fx, fy, fz, yaw, player.getXRot());
+        if (player.connection != null) {
+            player.connection.teleport(fx, fy, fz, yaw, player.getXRot());
+        }
+    }
+
+    private static boolean hasBedOrAnchorRespawn(ServerPlayer player) {
+        BlockPos respawn = player.getRespawnPosition();
+        if (respawn == null) {
+            return false;
+        }
+        if (player.isSpawnForced()) {
+            return false;
+        }
+        ServerLevel respawnLevel = player.server.getLevel(player.getRespawnDimension());
+        if (respawnLevel == null) {
+            return false;
+        }
+        BlockState state = respawnLevel.getBlockState(respawn);
+        return state.getBlock() instanceof BedBlock || state.is(Blocks.RESPAWN_ANCHOR);
     }
 
     public static BlockPos findSafeSpawn(ServerLevel level, ServerPlayer player) {
