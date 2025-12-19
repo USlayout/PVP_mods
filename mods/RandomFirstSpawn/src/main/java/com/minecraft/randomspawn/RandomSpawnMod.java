@@ -6,7 +6,7 @@ import net.minecraftforge.fml.config.ModConfig;
 
 @Mod("randomspawn")
 public class RandomSpawnMod {
-public RandomSpawnMod() {
-ModLoadingContext.get().registerConfig(ModConfig.Type.COMMON, Config.COMMON_CONFIG);
-}
+	public RandomSpawnMod() {
+		ModLoadingContext.get().registerConfig(ModConfig.Type.COMMON, Config.COMMON_CONFIG);
+	}
 }

@@ -145,9 +145,6 @@ public class RandomSpawnHandler {
         if (respawn == null) {
             return false;
         }
-        if (player.isSpawnForced()) {
-            return false;
-        }
         ServerLevel respawnLevel = player.server.getLevel(player.getRespawnDimension());
         if (respawnLevel == null) {
             return false;
