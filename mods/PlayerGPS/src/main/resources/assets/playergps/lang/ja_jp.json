@@ -1,0 +1,10 @@
+{
+  "item.playergps.player_locator": "プレイヤーロケーター",
+  "item.playergps.player_locator.tooltip.line1": "使用すると消費され、全プレイヤーの次元と座標を表示します。",
+  "item.playergps.player_locator.tooltip.line2.keep": "クリエイティブでは消費されません。",
+  "item.playergps.player_locator.tooltip.line2.consume": "クリエイティブでも消費されます。",
+  "message.playergps.locator.header": "%s / %s 人の位置を表示中",
+  "message.playergps.locator.entry": "%s | %s @ X:%s Y:%s Z:%s",
+  "message.playergps.locator.truncated": "…さらに %s 人",
+  "message.playergps.locator.empty": "表示できるプレイヤーはいません"
+}

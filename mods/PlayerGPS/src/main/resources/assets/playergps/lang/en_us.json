@@ -1,0 +1,10 @@
+{
+  "item.playergps.player_locator": "Player Locator",
+  "item.playergps.player_locator.tooltip.line1": "Single-use locator that reveals every player's dimension and coordinates.",
+  "item.playergps.player_locator.tooltip.line2.keep": "Creative mode players keep the item.",
+  "item.playergps.player_locator.tooltip.line2.consume": "Consumed even in creative mode.",
+  "message.playergps.locator.header": "Tracking %s / %s players",
+  "message.playergps.locator.entry": "%s | %s @ X:%s Y:%s Z:%s",
+  "message.playergps.locator.truncated": "...and %s more players.",
+  "message.playergps.locator.empty": "No valid players to display."
+}
